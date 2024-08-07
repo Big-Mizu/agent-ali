@@ -37,11 +37,14 @@ def generate_instructions(init_mgs, model_name="qwen-max"):
         {"role": "user", "content": content_instructions}
     ]
     reply = ask_question(mes, model_name)
+    num_tokens = 0
     out = ""
     for res in reply:
         if res.status_code == HTTPStatus.OK:
             out = out + res.output.choices[0]['message']['content']
-    return {"instructions" : out}
+            if res.output.choices[0]['finish_reason'] == 'stop':
+                num_tokens = num_tokens + res['usage']['total_tokens']
+    return {"instructions": out, "tokens": num_tokens}
 
 
 
@@ -76,14 +79,18 @@ def generate_info(init_mgs, model_name="qwen-max"):
         no_answered_list.append(res)
 
     # 查询答案
+    num_tokens = 0  # 统计token消耗数量
     reply_all_dic = {}
     for i, reply in zip(name_list, no_answered_list):
         out = ""
         for res in reply:
             if res.status_code == HTTPStatus.OK:
                 out = out + res.output.choices[0]['message']['content']
+                if res.output.choices[0]['finish_reason'] == 'stop':
+                    num_tokens = num_tokens + res['usage']['total_tokens']
         reply_all_dic[i] = out
     reply_all_dic["name"] = name
+    reply_all_dic["tokens"] = num_tokens
     return reply_all_dic
 
 

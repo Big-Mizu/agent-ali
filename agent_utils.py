@@ -75,12 +75,13 @@ def send_msg(user_msg, thread_id, assistant_id):
     dashscope.Messages.create(thread_id, content=user_msg)
     run = dashscope.Runs.create(thread_id=thread_id, assistant_id=assistant_id)
     verify_status_code(run)
-    dashscope.Runs.wait(run.id, thread_id=thread_id)
+    run_stutas = dashscope.Runs.wait(run.id, thread_id=thread_id)
+    token = run_stutas.usage["total_tokens"]
 
     msgs = dashscope.Messages.list(thread_id)  # 查看消息列表
     data = json.loads(json.dumps(msgs, ensure_ascii=False, default=lambda o: o.__dict__, sort_keys=True, indent=4))['data']
     res = data[0]["content"][0]['text']["value"]
-    return res
+    return res, token
 
 
 def agent_dialog_develop(messages):
@@ -91,9 +92,9 @@ def agent_dialog_develop(messages):
 
     assistant_old = dashscope.Assistants.retrieve(assistant_id)
     assistants_new = agent_update(assistant_id, instructions, "qwen-max")
-    res = send_msg(user_msg, thread_id, assistant_id)
+    res, tokens = send_msg(user_msg, thread_id, assistant_id)
 
-    return res, assistant_id, thread_id
+    return res, tokens, assistant_id, thread_id
 
 
 def agent_dialog(messages):
@@ -101,9 +102,9 @@ def agent_dialog(messages):
     thread_id = messages["chat_id"]
     user_msg = messages["user_msg"]
 
-    res = send_msg(user_msg, thread_id, assistant_id)
+    res, tokens = send_msg(user_msg, thread_id, assistant_id)
 
-    return res, assistant_id, thread_id
+    return res, tokens, assistant_id, thread_id
 
 
 
