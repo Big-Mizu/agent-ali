@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import json
 from agent_init_info import generate_instructions, draw_image, init_agent
 import dashscope
@@ -12,7 +12,7 @@ flask_app = Flask(__name__)
 def init_ag():
     """
     {"info" : "你是一个 Python 技术专家，熟练掌握 Python 技术栈相关知识，具有丰富的 Python 实战经验，参与过众多行业的应用设计和研发工作。你非常擅长 Python 教学和指导，能帮助技术和系统设计人员快速掌握相关技能，以及解决其遇到的问题。",
-    "name" : "智能体02"}
+    "name" : "智能体888"}
     """
     data = request.get_data().decode('utf-8')
     init_messages = json.loads(data)
@@ -62,17 +62,38 @@ def ag_dialog_develop():
     """
     data = request.get_data().decode('utf-8')
     useful_messages = json.loads(data)
-    res, tokens, assistant_id, chat_id = agent_dialog_develop(useful_messages)
-    out = {
-        "res": res,
-        "assistant_id": assistant_id,
-        "chat_id": chat_id,
-        "tokens": tokens
-    }
-    return jsonify(out)
+    assistant_id = useful_messages["assistant_id"]
+    thread_id = useful_messages["chat_id"]
+    user_msg = useful_messages["user_msg"]
+    instructions = useful_messages["instructions"]
+
+    assistant_old = dashscope.Assistants.retrieve(assistant_id)
+    assistants_new = dashscope.Assistants.update(
+        assistant_id=assistant_id,
+        model="qwen-max",
+        instructions=instructions
+    )
+
+    # 创建消息
+    dashscope.Messages.create(thread_id, content=user_msg)
+
+    def generate():
+        # 创建流式运行
+        stream_run = dashscope.Runs.create(thread_id=thread_id, assistant_id=assistant_id, stream=True)
+
+        # 处理流式输出
+        for event, msg in stream_run:
+            if event == "thread.message.delta":
+                text = msg['delta']['content']['text']['value']
+                yield f"data: {json.dumps({'text': text, 'tokens': 0})}\n\n"
+            elif event == "thread.run.completed":
+                token = msg['usage']["total_tokens"]
+                yield f"data: {json.dumps({'text': '', 'tokens': token})}\n\n"
+
+    return Response(generate(), mimetype='application/json')
 
 
-@flask_app.route('/ag_dialog', methods=['post'])
+@flask_app.route('/ag_dialog', methods=['POST'])
 def ag_dialog():
     """
     对话接口
@@ -84,14 +105,27 @@ def ag_dialog():
     """
     data = request.get_data().decode('utf-8')
     useful_messages = json.loads(data)
-    res, tokens, assistant_id, chat_id = agent_dialog(useful_messages)
-    out = {
-        "res": res,
-        "assistant_id": assistant_id,
-        "chat_id": chat_id,
-        "tokens": tokens
-    }
-    return jsonify(out)
+    assistant_id = useful_messages["assistant_id"]
+    thread_id = useful_messages["chat_id"]
+    user_msg = useful_messages["user_msg"]
+
+    # 创建消息
+    dashscope.Messages.create(thread_id, content=user_msg)
+
+    def generate():
+        # 创建流式运行
+        stream_run = dashscope.Runs.create(thread_id=thread_id, assistant_id=assistant_id, stream=True)
+
+        # 处理流式输出
+        for event, msg in stream_run:
+            if event == "thread.message.delta":
+                text = msg['delta']['content']['text']['value']
+                yield f"data: {json.dumps({'text': text, 'tokens': 0})}\n\n"
+            elif event == "thread.run.completed":
+                token = msg['usage']["total_tokens"]
+                yield f"data: {json.dumps({'text': '', 'tokens': token})}\n\n"
+
+    return Response(generate(), mimetype='application/json')
 
 
 @flask_app.route('/chat_recreate', methods=['post'])

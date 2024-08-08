@@ -121,7 +121,7 @@ def init_agent(init_messages):
     init_info = generate_info(init_messages)
 
     # 创建智能体
-    name = "智能体01"
+    name = init_info['name']
     description = init_info["description"]
     instructions = yaml_str["system_prompt_template"]["sys03"]
 

@@ -73,15 +73,18 @@ def msg_retrieve(msg_id, thread_id):
 
 def send_msg(user_msg, thread_id, assistant_id):
     dashscope.Messages.create(thread_id, content=user_msg)
-    run = dashscope.Runs.create(thread_id=thread_id, assistant_id=assistant_id)
-    verify_status_code(run)
-    run_stutas = dashscope.Runs.wait(run.id, thread_id=thread_id)
-    token = run_stutas.usage["total_tokens"]
+    stream_run = dashscope.Runs.create(thread_id=thread_id, assistant_id=assistant_id, stream=True)
 
-    msgs = dashscope.Messages.list(thread_id)  # 查看消息列表
-    data = json.loads(json.dumps(msgs, ensure_ascii=False, default=lambda o: o.__dict__, sort_keys=True, indent=4))['data']
-    res = data[0]["content"][0]['text']["value"]
-    return res, token
+    tokens = 0
+    for event, msg in stream_run:
+        print(event)
+        print(msg)
+        if event == "thread.message.delta":
+            text = msg['delta']['content']['text']['value']
+            yield text
+        if event == "thread.run.completed":
+            token = msg['usage']["total_tokens"]
+            yield token
 
 
 def agent_dialog_develop(messages):
@@ -94,7 +97,7 @@ def agent_dialog_develop(messages):
     assistants_new = agent_update(assistant_id, instructions, "qwen-max")
     res, tokens = send_msg(user_msg, thread_id, assistant_id)
 
-    return res, tokens, assistant_id, thread_id
+    yield res, tokens, assistant_id, thread_id
 
 
 def agent_dialog(messages):
@@ -102,9 +105,9 @@ def agent_dialog(messages):
     thread_id = messages["chat_id"]
     user_msg = messages["user_msg"]
 
-    res, tokens = send_msg(user_msg, thread_id, assistant_id)
+    res = send_msg(user_msg, thread_id, assistant_id)
 
-    return res, tokens, assistant_id, thread_id
+    yield res, assistant_id, thread_id
 
 
 
